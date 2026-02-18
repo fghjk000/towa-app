@@ -11,6 +11,8 @@ import 'core/providers/schedule_providers.dart';
 import 'core/repositories/schedule_repository.dart';
 import 'core/repositories/settings_repository.dart';
 import 'core/router.dart';
+import 'core/services/notification_service.dart';
+import 'core/services/widget_sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +28,9 @@ Future<void> main() async {
   final settingsRepo = SettingsRepository();
   await scheduleRepo.init();
   await settingsRepo.init();
+  await NotificationService.init();
+  await WidgetSyncService.init();
+  await NotificationService.requestPermission();
 
   runApp(ProviderScope(
     overrides: [
