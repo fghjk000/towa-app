@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'core/models/app_settings.dart';
 import 'core/models/cycle_block.dart';
 import 'core/models/overtime_entry.dart';
@@ -13,6 +14,7 @@ import 'core/router.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('ko', null);
   await Hive.initFlutter();
   Hive.registerAdapter(ShiftTypeAdapter());
   Hive.registerAdapter(CycleBlockAdapter());
