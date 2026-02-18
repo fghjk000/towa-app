@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'dart:io' show Platform;
 import '../models/schedule.dart';
 import '../models/shift_type.dart';
 import 'shift_calculator.dart';
@@ -9,7 +11,11 @@ class NotificationService {
   static final _plugin = FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
 
+  static bool get _supported =>
+      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
   static Future<void> init() async {
+    if (!_supported) return;
     if (_initialized) return;
     tz.initializeTimeZones();
 
@@ -22,6 +28,7 @@ class NotificationService {
   }
 
   static Future<void> requestPermission() async {
+    if (!_supported) return;
     await _plugin
         .resolvePlatformSpecificImplementation<
             IOSFlutterLocalNotificationsPlugin>()
@@ -55,6 +62,7 @@ class NotificationService {
     required List<ShiftType> shiftTypes,
     required int minutesBefore,
   }) async {
+    if (!_supported) return;
     await _plugin.cancelAll();
 
     final today = DateTime.now();
@@ -100,6 +108,7 @@ class NotificationService {
   /// Android 잠금화면 대체 — 오늘 근무 상시 알림
   static Future<void> showPersistentTodayNotification(
       ShiftType shift) async {
+    if (!_supported) return;
     final body = shift.isOff
         ? '휴무일입니다'
         : '${shift.name} '
@@ -127,5 +136,8 @@ class NotificationService {
     );
   }
 
-  static Future<void> cancelAll() => _plugin.cancelAll();
+  static Future<void> cancelAll() async {
+    if (!_supported) return;
+    await _plugin.cancelAll();
+  }
 }

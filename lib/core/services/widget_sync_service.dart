@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
+import 'dart:io' show Platform;
 import '../models/shift_type.dart';
 
 class WidgetSyncService {
@@ -6,11 +8,16 @@ class WidgetSyncService {
   static const _iOSWidgetName = 'ShiftWidget';
   static const _androidWidgetName = 'com.shiftwidget.widget.ShiftWidgetReceiver';
 
+  static bool get _supported =>
+      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
   static Future<void> init() async {
+    if (!_supported) return;
     await HomeWidget.setAppGroupId(_appGroupId);
   }
 
   static Future<void> updateWidget(ShiftType? shift) async {
+    if (!_supported) return;
     await HomeWidget.saveWidgetData<String>(
         'shift_name', shift?.name ?? '휴무');
     await HomeWidget.saveWidgetData<String>(
