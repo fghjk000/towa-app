@@ -9,6 +9,7 @@ import 'core/models/shift_type.dart';
 import 'core/providers/schedule_providers.dart';
 import 'core/repositories/schedule_repository.dart';
 import 'core/repositories/settings_repository.dart';
+import 'core/router.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,15 +39,13 @@ class ShiftWidgetApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       title: '교대근무',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      home: const Scaffold(
-        body: Center(child: Text('교대근무 앱')),
-      ),
+      routerConfig: appRouter,
     );
   }
 }
