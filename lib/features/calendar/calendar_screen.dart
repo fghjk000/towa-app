@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'package:uuid/uuid.dart';
-import '../../core/models/overtime_entry.dart';
+import '../../core/models/date_override.dart';
 import '../../core/models/shift_type.dart';
 import '../../core/providers/schedule_providers.dart';
 import '../../core/services/shift_calculator.dart';
@@ -17,12 +16,12 @@ class CalendarScreen extends ConsumerStatefulWidget {
 
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   DateTime _focusedDay = DateTime.now();
-  final List<OvertimeEntry> _overtimes = [];
 
   @override
   Widget build(BuildContext context) {
     final schedule = ref.watch(activeScheduleProvider);
     final shiftTypes = ref.watch(shiftTypesProvider);
+    final overrides = ref.watch(overridesProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -43,24 +42,24 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             onPageChanged: (day) => setState(() => _focusedDay = day),
             onDaySelected: (selected, focused) {
               setState(() => _focusedDay = focused);
-              _showOvertimeSheet(context, selected);
+              if (schedule != null) {
+                _showShiftOverrideSheet(context, selected, schedule.id, shiftTypes, overrides);
+              }
             },
             calendarBuilders: CalendarBuilders(
               defaultBuilder: (context, day, focusedDay) {
                 if (schedule == null) return null;
-                final id =
-                    ShiftCalculator.getShiftTypeIdForDate(schedule, day);
-                final shift =
-                    shiftTypes.where((t) => t.id == id).firstOrNull;
+                final id = ShiftCalculator.getShiftTypeIdForDate(
+                    schedule, day, overrides: overrides);
+                final shift = shiftTypes.where((t) => t.id == id).firstOrNull;
                 if (shift == null) return null;
                 return _DayCell(day: day, shift: shift);
               },
               todayBuilder: (context, day, focusedDay) {
                 if (schedule == null) return null;
-                final id =
-                    ShiftCalculator.getShiftTypeIdForDate(schedule, day);
-                final shift =
-                    shiftTypes.where((t) => t.id == id).firstOrNull;
+                final id = ShiftCalculator.getShiftTypeIdForDate(
+                    schedule, day, overrides: overrides);
+                final shift = shiftTypes.where((t) => t.id == id).firstOrNull;
                 if (shift == null) return null;
                 return _DayCell(day: day, shift: shift, isToday: true);
               },
@@ -71,33 +70,51 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  void _showOvertimeSheet(BuildContext context, DateTime date) {
-    final hasOvertime = _overtimes.any(
-        (o) => _sameDay(o.date, date));
+  void _showShiftOverrideSheet(
+    BuildContext context,
+    DateTime date,
+    String scheduleId,
+    List<ShiftType> shiftTypes,
+    List<DateOverride> overrides,
+  ) {
+    final schedule = ref.read(activeScheduleProvider);
+    if (schedule == null) return;
+
+    final currentId = ShiftCalculator.getShiftTypeIdForDate(
+        schedule, date, overrides: overrides);
+    final hasOverride = overrides.any((o) =>
+        o.scheduleId == scheduleId &&
+        o.date.year == date.year &&
+        o.date.month == date.month &&
+        o.date.day == date.day);
+
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
-      builder: (_) => _OvertimeSheet(
+      builder: (ctx) => _ShiftOverrideSheet(
         date: date,
-        existing: hasOvertime
-            ? _overtimes.firstWhere((o) => _sameDay(o.date, date))
+        currentShiftTypeId: currentId,
+        hasOverride: hasOverride,
+        shiftTypes: shiftTypes,
+        onSelect: (shiftTypeId) async {
+          await ref.read(overridesProvider.notifier).saveOverride(
+                DateOverride(
+                  scheduleId: scheduleId,
+                  date: DateTime(date.year, date.month, date.day),
+                  shiftTypeId: shiftTypeId,
+                ),
+              );
+        },
+        onReset: hasOverride
+            ? () async {
+                await ref.read(overridesProvider.notifier).deleteOverride(
+                      scheduleId,
+                      DateTime(date.year, date.month, date.day),
+                    );
+              }
             : null,
-        onSave: (entry) {
-          setState(() {
-            _overtimes.removeWhere((o) => _sameDay(o.date, date));
-            _overtimes.add(entry);
-          });
-        },
-        onDelete: () {
-          setState(() =>
-              _overtimes.removeWhere((o) => _sameDay(o.date, date)));
-        },
       ),
     );
   }
-
-  bool _sameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
 class _DayCell extends StatelessWidget {
@@ -137,128 +154,65 @@ class _DayCell extends StatelessWidget {
   }
 }
 
-class _OvertimeSheet extends StatefulWidget {
+class _ShiftOverrideSheet extends StatelessWidget {
   final DateTime date;
-  final OvertimeEntry? existing;
-  final ValueChanged<OvertimeEntry> onSave;
-  final VoidCallback onDelete;
+  final String? currentShiftTypeId;
+  final bool hasOverride;
+  final List<ShiftType> shiftTypes;
+  final ValueChanged<String> onSelect;
+  final VoidCallback? onReset;
 
-  const _OvertimeSheet({
+  const _ShiftOverrideSheet({
     required this.date,
-    required this.onSave,
-    required this.onDelete,
-    this.existing,
+    required this.currentShiftTypeId,
+    required this.hasOverride,
+    required this.shiftTypes,
+    required this.onSelect,
+    this.onReset,
   });
 
   @override
-  State<_OvertimeSheet> createState() => _OvertimeSheetState();
-}
-
-class _OvertimeSheetState extends State<_OvertimeSheet> {
-  late TextEditingController _noteCtrl;
-  TimeOfDay? _start;
-  TimeOfDay? _end;
-
-  @override
-  void initState() {
-    super.initState();
-    final e = widget.existing;
-    _noteCtrl = TextEditingController(text: e?.note ?? '');
-    if (e != null) {
-      if (e.startHour != null) {
-        _start = TimeOfDay(hour: e.startHour!, minute: e.startMinute ?? 0);
-      }
-      if (e.endHour != null) {
-        _end = TimeOfDay(hour: e.endHour!, minute: e.endMinute ?? 0);
-      }
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final d = widget.date;
     return Padding(
-      padding: EdgeInsets.only(
-        left: 16, right: 16, top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '특근 등록 — ${d.year}/${d.month}/${d.day}',
-            style: const TextStyle(
-                fontWeight: FontWeight.bold, fontSize: 16),
+            '${date.year}/${date.month}/${date.day} 근무 유형 변경',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _noteCtrl,
-            decoration: const InputDecoration(
-              labelText: '메모 (선택)',
-              border: OutlineInputBorder(),
+          if (hasOverride)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('* 수동 변경됨',
+                  style: TextStyle(
+                      fontSize: 12, color: Colors.orange.shade700)),
             ),
-          ),
-          const SizedBox(height: 8),
-          Row(children: [
-            Expanded(
-              child: ListTile(
-                title: Text(_start == null
-                    ? '시작 시간'
-                    : _start!.format(context)),
-                leading: const Icon(Icons.access_time),
-                onTap: () async {
-                  final t = await showTimePicker(
-                      context: context,
-                      initialTime: _start ?? TimeOfDay.now());
-                  if (t != null) setState(() => _start = t);
-                },
-              ),
-            ),
-            Expanded(
-              child: ListTile(
-                title: Text(
-                    _end == null ? '종료 시간' : _end!.format(context)),
-                leading: const Icon(Icons.access_time_filled),
-                onTap: () async {
-                  final t = await showTimePicker(
-                      context: context,
-                      initialTime: _end ?? TimeOfDay.now());
-                  if (t != null) setState(() => _end = t);
-                },
-              ),
-            ),
-          ]),
-          const SizedBox(height: 8),
-          Row(children: [
-            if (widget.existing != null)
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {
-                    widget.onDelete();
-                    Navigator.pop(context);
-                  },
-                  child: const Text('삭제'),
-                ),
-              ),
-            if (widget.existing != null) const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () {
-                  widget.onSave(OvertimeEntry(
-                    id: widget.existing?.id ?? const Uuid().v4(),
-                    date: widget.date,
-                    note: _noteCtrl.text.isEmpty ? null : _noteCtrl.text,
-                    startHour: _start?.hour,
-                    startMinute: _start?.minute,
-                    endHour: _end?.hour,
-                    endMinute: _end?.minute,
-                  ));
+          const SizedBox(height: 16),
+          ...shiftTypes.map((t) => ListTile(
+                leading: CircleAvatar(backgroundColor: Color(t.colorValue)),
+                title: Text(t.name),
+                trailing: t.id == currentShiftTypeId
+                    ? const Icon(Icons.check, color: Colors.green)
+                    : null,
+                onTap: () {
+                  onSelect(t.id);
                   Navigator.pop(context);
                 },
-                child: const Text('저장'),
-              ),
+              )),
+          if (onReset != null) ...[
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.refresh, color: Colors.grey),
+              title: const Text('사이클 기본값으로 되돌리기'),
+              onTap: () {
+                onReset!();
+                Navigator.pop(context);
+              },
             ),
-          ]),
+          ],
         ],
       ),
     );
