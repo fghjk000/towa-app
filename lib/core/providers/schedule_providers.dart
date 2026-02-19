@@ -102,16 +102,14 @@ class OverridesNotifier extends StateNotifier<List<DateOverride>> {
       : super(_scheduleId != null ? _repo.getForSchedule(_scheduleId) : []);
 
   Future<void> saveOverride(DateOverride override) async {
+    if (_scheduleId == null || override.scheduleId != _scheduleId) return;
     await _repo.save(override);
-    if (_scheduleId != null) {
-      state = _repo.getForSchedule(_scheduleId);
-    }
+    state = _repo.getForSchedule(_scheduleId);
   }
 
   Future<void> deleteOverride(String scheduleId, DateTime date) async {
+    if (_scheduleId == null) return;
     await _repo.delete(scheduleId, date);
-    if (_scheduleId != null) {
-      state = _repo.getForSchedule(_scheduleId);
-    }
+    state = _repo.getForSchedule(_scheduleId);
   }
 }

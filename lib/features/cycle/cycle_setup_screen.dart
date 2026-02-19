@@ -34,6 +34,12 @@ class _CycleSetupScreenState extends ConsumerState<CycleSetupScreen> {
     final now = DateTime.now();
     _year = now.year;
     _month = now.month;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final types = ref.read(shiftTypesProvider);
+      if (types.isNotEmpty && _selectedShiftTypeId == null) {
+        setState(() => _selectedShiftTypeId = types.first.id);
+      }
+    });
   }
 
   @override
@@ -70,11 +76,15 @@ class _CycleSetupScreenState extends ConsumerState<CycleSetupScreen> {
   }
 
   /// 페인트된 날짜에서 CycleBlock 리스트 추출
-  List<CycleBlock> _extractBlocks() {
+  List<CycleBlock> _extractBlocks(List<ShiftType> shiftTypes) {
     if (_paintedDays.isEmpty) return [];
     final sorted = _paintedDays.keys.toList()..sort();
     final start = sorted.first;
     final end = sorted.last;
+    final offId = shiftTypes
+        .where((t) => t.isOff)
+        .map((t) => t.id)
+        .firstOrNull ?? shiftTypes.first.id;
 
     final blocks = <CycleBlock>[];
     String? currentId;
@@ -83,7 +93,7 @@ class _CycleSetupScreenState extends ConsumerState<CycleSetupScreen> {
     for (int i = 0; i <= end.difference(start).inDays; i++) {
       final d = start.add(Duration(days: i));
       final key = DateTime(d.year, d.month, d.day);
-      final typeId = _paintedDays[key] ?? 'off';
+      final typeId = _paintedDays[key] ?? offId;
 
       if (typeId == currentId) {
         count++;
@@ -105,7 +115,7 @@ class _CycleSetupScreenState extends ConsumerState<CycleSetupScreen> {
     if (_paintedDays.isEmpty || _nameCtrl.text.trim().isEmpty) return;
     final sorted = _paintedDays.keys.toList()..sort();
     final startDate = sorted.first;
-    final blocks = _extractBlocks();
+    final blocks = _extractBlocks(ref.read(shiftTypesProvider));
 
     final schedule = Schedule(
       id: const Uuid().v4(),
@@ -130,9 +140,6 @@ class _CycleSetupScreenState extends ConsumerState<CycleSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final shiftTypes = ref.watch(shiftTypesProvider);
-    if (_selectedShiftTypeId == null && shiftTypes.isNotEmpty) {
-      _selectedShiftTypeId = shiftTypes.first.id;
-    }
 
     return Scaffold(
       appBar: AppBar(
