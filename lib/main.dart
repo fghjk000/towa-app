@@ -4,6 +4,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/models/app_settings.dart';
 import 'core/models/cycle_block.dart';
+import 'core/models/date_override.dart';
 import 'core/models/overtime_entry.dart';
 import 'core/models/schedule.dart';
 import 'core/models/shift_type.dart';
@@ -23,6 +24,7 @@ Future<void> main() async {
   Hive.registerAdapter(ScheduleAdapter());
   Hive.registerAdapter(OvertimeEntryAdapter());
   Hive.registerAdapter(AppSettingsAdapter());
+  Hive.registerAdapter(DateOverrideAdapter());
 
   final scheduleRepo = ScheduleRepository();
   final settingsRepo = SettingsRepository();
