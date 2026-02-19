@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/app_settings.dart';
+import '../models/date_override.dart';
 import '../models/schedule.dart';
 import '../models/shift_type.dart';
+import '../repositories/override_repository.dart';
 import '../repositories/schedule_repository.dart';
 import '../repositories/settings_repository.dart';
 
@@ -77,4 +79,39 @@ class ShiftTypesNotifier extends StateNotifier<List<ShiftType>> {
 
   void update(ShiftType type) =>
       state = state.map((t) => t.id == type.id ? type : t).toList();
+}
+
+final overrideRepositoryProvider = Provider<OverrideRepository>((ref) {
+  throw UnimplementedError('main에서 override 필요');
+});
+
+final overridesProvider =
+    StateNotifierProvider<OverridesNotifier, List<DateOverride>>((ref) {
+  final settings = ref.watch(appSettingsProvider);
+  return OverridesNotifier(
+    ref.watch(overrideRepositoryProvider),
+    settings.activeScheduleId,
+  );
+});
+
+class OverridesNotifier extends StateNotifier<List<DateOverride>> {
+  final OverrideRepository _repo;
+  final String? _scheduleId;
+
+  OverridesNotifier(this._repo, this._scheduleId)
+      : super(_scheduleId != null ? _repo.getForSchedule(_scheduleId) : []);
+
+  Future<void> saveOverride(DateOverride override) async {
+    await _repo.save(override);
+    if (_scheduleId != null) {
+      state = _repo.getForSchedule(_scheduleId);
+    }
+  }
+
+  Future<void> deleteOverride(String scheduleId, DateTime date) async {
+    await _repo.delete(scheduleId, date);
+    if (_scheduleId != null) {
+      state = _repo.getForSchedule(_scheduleId);
+    }
+  }
 }

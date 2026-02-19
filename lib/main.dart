@@ -9,6 +9,7 @@ import 'core/models/overtime_entry.dart';
 import 'core/models/schedule.dart';
 import 'core/models/shift_type.dart';
 import 'core/providers/schedule_providers.dart';
+import 'core/repositories/override_repository.dart';
 import 'core/repositories/schedule_repository.dart';
 import 'core/repositories/settings_repository.dart';
 import 'core/router.dart';
@@ -29,6 +30,8 @@ Future<void> main() async {
   final scheduleRepo = ScheduleRepository();
   final settingsRepo = SettingsRepository();
   await scheduleRepo.init();
+  final overrideRepo = OverrideRepository();
+  await overrideRepo.init();
   await settingsRepo.init();
   await NotificationService.init();
   await WidgetSyncService.init();
@@ -38,6 +41,7 @@ Future<void> main() async {
     overrides: [
       scheduleRepositoryProvider.overrideWithValue(scheduleRepo),
       settingsRepositoryProvider.overrideWithValue(settingsRepo),
+      overrideRepositoryProvider.overrideWithValue(overrideRepo),
     ],
     child: const ShiftWidgetApp(),
   ));
