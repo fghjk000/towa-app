@@ -33,12 +33,13 @@ void main() {
       expect(off.isOff, true);
     });
 
-    test('defaults()는 주간, 야간, 휴무 3개를 반환한다', () {
+    test('defaults()는 주간, 야간, 휴무, 특근 4개를 반환한다', () {
       final defaults = ShiftType.defaults();
-      expect(defaults.length, 3);
+      expect(defaults.length, 4);
       expect(defaults.any((t) => t.id == 'day'), true);
       expect(defaults.any((t) => t.id == 'night'), true);
       expect(defaults.any((t) => t.id == 'off'), true);
+      expect(defaults.any((t) => t.id == 'overtime'), true);
     });
   });
 }

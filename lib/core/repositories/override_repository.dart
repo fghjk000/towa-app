@@ -17,12 +17,13 @@ class OverrideRepository {
       _box.values.where((o) => o.scheduleId == scheduleId).toList();
 
   Future<void> save(DateOverride override) async {
-    final key = '${override.scheduleId}_${override.date.millisecondsSinceEpoch}';
+    final d = override.date;
+    final key = '${override.scheduleId}_${d.year}_${d.month}_${d.day}';
     await _box.put(key, override);
   }
 
   Future<void> delete(String scheduleId, DateTime date) async {
-    final key = '${scheduleId}_${date.millisecondsSinceEpoch}';
+    final key = '${scheduleId}_${date.year}_${date.month}_${date.day}';
     await _box.delete(key);
   }
 

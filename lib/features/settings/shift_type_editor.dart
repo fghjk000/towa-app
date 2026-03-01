@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/models/shift_type.dart';
 import '../../core/providers/schedule_providers.dart';
+import '../../app_widget_observer.dart';
 
 class ShiftTypeEditor extends ConsumerStatefulWidget {
   final ShiftType? shiftType;
@@ -80,10 +82,9 @@ class _ShiftTypeEditorState extends ConsumerState<ShiftTypeEditor> {
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('시작'),
-                  subtitle: Text(_start.format(context)),
+                  subtitle: Text(_fmt(_start)),
                   onTap: () async {
-                    final t = await showTimePicker(
-                        context: context, initialTime: _start);
+                    final t = await _pickTime(context, _start);
                     if (t != null) setState(() => _start = t);
                   },
                 ),
@@ -92,10 +93,9 @@ class _ShiftTypeEditorState extends ConsumerState<ShiftTypeEditor> {
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('종료'),
-                  subtitle: Text(_end.format(context)),
+                  subtitle: Text(_fmt(_end)),
                   onTap: () async {
-                    final t = await showTimePicker(
-                        context: context, initialTime: _end);
+                    final t = await _pickTime(context, _end);
                     if (t != null) setState(() => _end = t);
                   },
                 ),
@@ -128,7 +128,17 @@ class _ShiftTypeEditorState extends ConsumerState<ShiftTypeEditor> {
     );
   }
 
-  void _save() {
+  String _fmt(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  Future<TimeOfDay?> _pickTime(BuildContext context, TimeOfDay initial) {
+    return showDialog<TimeOfDay>(
+      context: context,
+      builder: (ctx) => _TimePickerDialog(initial: initial),
+    );
+  }
+
+  Future<void> _save() async {
     if (_nameCtrl.text.trim().isEmpty) return;
     final type = ShiftType(
       id: widget.shiftType?.id ?? const Uuid().v4(),
@@ -141,10 +151,120 @@ class _ShiftTypeEditorState extends ConsumerState<ShiftTypeEditor> {
       isOff: _isOff,
     );
     if (widget.shiftType != null) {
-      ref.read(shiftTypesProvider.notifier).update(type);
+      await ref.read(shiftTypesProvider.notifier).update(type);
     } else {
-      ref.read(shiftTypesProvider.notifier).add(type);
+      await ref.read(shiftTypesProvider.notifier).add(type);
     }
-    Navigator.pop(context);
+    // 근무 시간 변경 시 알림 즉시 재스케줄
+    await syncAll(ref);
+    if (mounted) Navigator.pop(context);
+  }
+}
+
+/// 시간 입력 다이얼로그 — 자체 lifecycle로 controller/focus 관리
+class _TimePickerDialog extends StatefulWidget {
+  final TimeOfDay initial;
+  const _TimePickerDialog({required this.initial});
+
+  @override
+  State<_TimePickerDialog> createState() => _TimePickerDialogState();
+}
+
+class _TimePickerDialogState extends State<_TimePickerDialog> {
+  late final TextEditingController _hourCtrl;
+  late final TextEditingController _minCtrl;
+  late final FocusNode _minFocus;
+
+  @override
+  void initState() {
+    super.initState();
+    _hourCtrl = TextEditingController(
+        text: widget.initial.hour.toString().padLeft(2, '0'));
+    _minCtrl = TextEditingController(
+        text: widget.initial.minute.toString().padLeft(2, '0'));
+    _minFocus = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _hourCtrl.dispose();
+    _minCtrl.dispose();
+    _minFocus.dispose();
+    super.dispose();
+  }
+
+  void _selectAll(TextEditingController ctrl) {
+    ctrl.selection =
+        TextSelection(baseOffset: 0, extentOffset: ctrl.text.length);
+  }
+
+  void _confirm() {
+    final h = int.tryParse(_hourCtrl.text);
+    final m = int.tryParse(_minCtrl.text);
+    if (h != null && m != null && h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+      Navigator.pop(context, TimeOfDay(hour: h, minute: m));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('시간 입력 (24시간)'),
+      content: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _hourCtrl,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              decoration: const InputDecoration(
+                  labelText: '시', counterText: '',
+                  border: OutlineInputBorder()),
+              maxLength: 2,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onTap: () => _selectAll(_hourCtrl),
+              onChanged: (v) {
+                if (v.length == 2) {
+                  _minFocus.requestFocus();
+                  // mounted 보장된 상태에서 실행
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) _selectAll(_minCtrl);
+                  });
+                }
+              },
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12),
+            child: Text(':',
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          ),
+          Expanded(
+            child: TextField(
+              controller: _minCtrl,
+              focusNode: _minFocus,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              decoration: const InputDecoration(
+                  labelText: '분', counterText: '',
+                  border: OutlineInputBorder()),
+              maxLength: 2,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onTap: () => _selectAll(_minCtrl),
+              onSubmitted: (_) => _confirm(),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소')),
+        TextButton(
+            onPressed: _confirm,
+            child: const Text('확인')),
+      ],
+    );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
+import '../../app_widget_observer.dart';
 import '../../core/models/app_settings.dart';
 import '../../core/models/cycle_block.dart';
 import '../../core/models/schedule.dart';
@@ -70,9 +71,15 @@ class _CycleSetupScreenState extends ConsumerState<CycleSetupScreen> {
     });
   }
 
-  void _paintDay(DateTime day) {
+  void _paintDay(DateTime day, {required bool erase}) {
     if (_selectedShiftTypeId == null) return;
-    setState(() => _paintedDays[day] = _selectedShiftTypeId!);
+    setState(() {
+      if (erase) {
+        _paintedDays.remove(day);
+      } else {
+        _paintedDays[day] = _selectedShiftTypeId!;
+      }
+    });
   }
 
   /// 페인트된 날짜에서 CycleBlock 리스트 추출
@@ -82,9 +89,10 @@ class _CycleSetupScreenState extends ConsumerState<CycleSetupScreen> {
     final start = sorted.first;
     final end = sorted.last;
     final offId = shiftTypes
-        .where((t) => t.isOff)
-        .map((t) => t.id)
-        .firstOrNull ?? shiftTypes.first.id;
+            .where((t) => t.isOff)
+            .map((t) => t.id)
+            .firstOrNull ??
+        (shiftTypes.isNotEmpty ? shiftTypes.first.id : 'off');
 
     final blocks = <CycleBlock>[];
     String? currentId;
@@ -134,6 +142,9 @@ class _CycleSetupScreenState extends ConsumerState<CycleSetupScreen> {
           ),
         );
 
+    // 사이클 저장 후 알림 및 위젯 재동기화
+    await syncAll(ref);
+
     if (mounted) context.pop();
   }
 
@@ -181,7 +192,8 @@ class _CycleSetupScreenState extends ConsumerState<CycleSetupScreen> {
               paintedDays: _paintedDays,
               selectedShiftTypeId: _selectedShiftTypeId,
               shiftTypes: shiftTypes,
-              onDayPainted: _paintDay,
+              onDayPainted: (day, {required bool erase}) =>
+                  _paintDay(day, erase: erase),
               onPrevMonth: _prevMonth,
               onNextMonth: _nextMonth,
             ),
@@ -211,18 +223,17 @@ class _CycleSetupScreenState extends ConsumerState<CycleSetupScreen> {
 // ─────────────────────────────────────────────
 // 페인터블 달력 위젯
 // ─────────────────────────────────────────────
-class _PaintableCalendar extends StatelessWidget {
+typedef DayPaintCallback = void Function(DateTime day, {required bool erase});
+
+class _PaintableCalendar extends StatefulWidget {
   final int year;
   final int month;
   final Map<DateTime, String> paintedDays;
   final String? selectedShiftTypeId;
   final List<ShiftType> shiftTypes;
-  final ValueChanged<DateTime> onDayPainted;
+  final DayPaintCallback onDayPainted;
   final VoidCallback onPrevMonth;
   final VoidCallback onNextMonth;
-
-  static const _cellHeight = 52.0;
-  static const _weekLabels = ['일', '월', '화', '수', '목', '금', '토'];
 
   const _PaintableCalendar({
     required this.year,
@@ -235,9 +246,19 @@ class _PaintableCalendar extends StatelessWidget {
     required this.onNextMonth,
   });
 
-  int get _daysInMonth => DateTime(year, month + 1, 0).day;
-  // 0=일, 1=월 ... 6=토 (DateTime.weekday: 1=월 ~ 7=일, %7 변환)
-  int get _firstWeekday => DateTime(year, month, 1).weekday % 7;
+  @override
+  State<_PaintableCalendar> createState() => _PaintableCalendarState();
+}
+
+class _PaintableCalendarState extends State<_PaintableCalendar> {
+  static const _cellHeight = 52.0;
+  static const _weekLabels = ['일', '월', '화', '수', '목', '금', '토'];
+
+  // 드래그 시작 시점에 결정: true=지우기모드, false=칠하기모드
+  bool? _dragErasing;
+
+  int get _daysInMonth => DateTime(widget.year, widget.month + 1, 0).day;
+  int get _firstWeekday => DateTime(widget.year, widget.month, 1).weekday % 7;
 
   DateTime? _dayFromOffset(Offset pos, double cellWidth) {
     final col = (pos.dx / cellWidth).floor().clamp(0, 6);
@@ -245,7 +266,29 @@ class _PaintableCalendar extends StatelessWidget {
     if (row < 0) return null;
     final dayNum = row * 7 + col - _firstWeekday + 1;
     if (dayNum < 1 || dayNum > _daysInMonth) return null;
-    return DateTime(year, month, dayNum);
+    return DateTime(widget.year, widget.month, dayNum);
+  }
+
+  void _onPanStart(Offset pos, double cellWidth) {
+    final day = _dayFromOffset(pos, cellWidth);
+    if (day == null) return;
+    // 이미 같은 유형으로 칠해져 있으면 지우기 모드
+    _dragErasing = widget.paintedDays[day] == widget.selectedShiftTypeId;
+    widget.onDayPainted(day, erase: _dragErasing!);
+  }
+
+  void _onPanUpdate(Offset pos, double cellWidth) {
+    if (_dragErasing == null) return;
+    final day = _dayFromOffset(pos, cellWidth);
+    if (day != null) widget.onDayPainted(day, erase: _dragErasing!);
+  }
+
+  void _onTapDown(Offset pos, double cellWidth) {
+    final day = _dayFromOffset(pos, cellWidth);
+    if (day == null) return;
+    // 탭: 같은 유형이면 제거, 다른 유형(또는 빈 칸)이면 칠하기
+    final erase = widget.paintedDays[day] == widget.selectedShiftTypeId;
+    widget.onDayPainted(day, erase: erase);
   }
 
   @override
@@ -258,13 +301,13 @@ class _PaintableCalendar extends StatelessWidget {
           children: [
             IconButton(
                 icon: const Icon(Icons.chevron_left),
-                onPressed: onPrevMonth),
-            Text('$year년 $month월',
+                onPressed: widget.onPrevMonth),
+            Text('${widget.year}년 ${widget.month}월',
                 style: const TextStyle(
                     fontWeight: FontWeight.bold, fontSize: 16)),
             IconButton(
                 icon: const Icon(Icons.chevron_right),
-                onPressed: onNextMonth),
+                onPressed: widget.onNextMonth),
           ],
         ),
         // 요일 라벨
@@ -293,18 +336,10 @@ class _PaintableCalendar extends StatelessWidget {
             builder: (context, constraints) {
               final cellWidth = constraints.maxWidth / 7;
               return GestureDetector(
-                onPanStart: (d) {
-                  final day = _dayFromOffset(d.localPosition, cellWidth);
-                  if (day != null) onDayPainted(day);
-                },
-                onPanUpdate: (d) {
-                  final day = _dayFromOffset(d.localPosition, cellWidth);
-                  if (day != null) onDayPainted(day);
-                },
-                onTapDown: (d) {
-                  final day = _dayFromOffset(d.localPosition, cellWidth);
-                  if (day != null) onDayPainted(day);
-                },
+                onPanStart: (d) => _onPanStart(d.localPosition, cellWidth),
+                onPanUpdate: (d) => _onPanUpdate(d.localPosition, cellWidth),
+                onPanEnd: (_) => _dragErasing = null,
+                onTapDown: (d) => _onTapDown(d.localPosition, cellWidth),
                 child: _buildGrid(cellWidth),
               );
             },
@@ -328,10 +363,10 @@ class _PaintableCalendar extends StatelessWidget {
               if (dayNum < 1 || dayNum > _daysInMonth) {
                 return SizedBox(width: cellWidth);
               }
-              final date = DateTime(year, month, dayNum);
-              final shiftId = paintedDays[date];
+              final date = DateTime(widget.year, widget.month, dayNum);
+              final shiftId = widget.paintedDays[date];
               final shift = shiftId != null
-                  ? shiftTypes.where((t) => t.id == shiftId).firstOrNull
+                  ? widget.shiftTypes.where((t) => t.id == shiftId).firstOrNull
                   : null;
 
               return SizedBox(

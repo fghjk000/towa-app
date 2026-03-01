@@ -38,8 +38,9 @@ struct ShiftWidgetEntryView: View {
 
     var body: some View {
         switch family {
+
+        // ── 잠금화면 (vibrancy 렌더링 — 색상 미적용) ──────
         case .accessoryCircular:
-            // 잠금화면 원형 위젯
             VStack(spacing: 2) {
                 Image(systemName: "clock.fill")
                     .font(.caption2)
@@ -47,8 +48,8 @@ struct ShiftWidgetEntryView: View {
                     .font(.caption2)
                     .fontWeight(.bold)
             }
+
         case .accessoryRectangular:
-            // 잠금화면 직사각형 위젯
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.shiftName)
                     .font(.headline)
@@ -58,14 +59,47 @@ struct ShiftWidgetEntryView: View {
                         .font(.caption)
                 }
             }
+
         case .accessoryInline:
-            // 잠금화면 인라인 위젯
-            Label(
-                entry.shiftName,
-                systemImage: "clock"
-            )
+            Label(entry.shiftName, systemImage: "clock")
+
+        // ── 홈화면 medium: 이름 왼쪽 + 시간 오른쪽 ────────
+        case .systemMedium:
+            HStack(spacing: 0) {
+                Text(entry.shiftName)
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if !entry.shiftTime.isEmpty {
+                    Text(entry.shiftTime)
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding()
+
+        // ── 홈화면 large: 이름 크게 + 시간 ─────────────────
+        case .systemLarge:
+            VStack(spacing: 8) {
+                Text(entry.shiftName)
+                    .font(.system(size: 52, weight: .bold))
+                    .minimumScaleFactor(0.4)
+                    .lineLimit(1)
+                if !entry.shiftTime.isEmpty {
+                    Text(entry.shiftTime)
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+
+        // ── 홈화면 small (기본): 이름 + 시간 가운데 ─────────
         default:
-            // 홈화면 위젯 (systemSmall, systemMedium)
             VStack(spacing: 4) {
                 Text(entry.shiftName)
                     .font(.title)
@@ -73,13 +107,28 @@ struct ShiftWidgetEntryView: View {
                 if !entry.shiftTime.isEmpty {
                     Text(entry.shiftTime)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
-                Text("오늘")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
             }
             .padding()
+        }
+    }
+}
+
+/// iOS 16 래퍼: accessory 위젯에는 배경 미적용
+private struct _IOS16ContainerView: View {
+    var entry: ShiftEntry
+    @Environment(\.widgetFamily) var family
+
+    var body: some View {
+        let isAccessory = family == .accessoryCircular
+            || family == .accessoryRectangular
+            || family == .accessoryInline
+        if isAccessory {
+            ShiftWidgetEntryView(entry: entry)
+        } else {
+            ShiftWidgetEntryView(entry: entry)
+                .background(Color.clear)
         }
     }
 }
@@ -98,11 +147,9 @@ struct ShiftWidgetMain: Widget {
         StaticConfiguration(kind: kind, provider: ShiftProvider()) { entry in
             if #available(iOSApplicationExtension 17.0, *) {
                 ShiftWidgetEntryView(entry: entry)
-                    .containerBackground(.fill.tertiary, for: .widget)
+                    .containerBackground(.thinMaterial, for: .widget)
             } else {
-                ShiftWidgetEntryView(entry: entry)
-                    .padding()
-                    .background()
+                _IOS16ContainerView(entry: entry)
             }
         }
         .configurationDisplayName("교대근무")
@@ -110,6 +157,7 @@ struct ShiftWidgetMain: Widget {
         .supportedFamilies([
             .systemSmall,
             .systemMedium,
+            .systemLarge,
             .accessoryCircular,
             .accessoryRectangular,
             .accessoryInline,

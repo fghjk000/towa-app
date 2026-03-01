@@ -6,6 +6,7 @@ import '../models/shift_type.dart';
 import '../repositories/override_repository.dart';
 import '../repositories/schedule_repository.dart';
 import '../repositories/settings_repository.dart';
+import '../repositories/shift_type_repository.dart';
 
 final scheduleRepositoryProvider = Provider<ScheduleRepository>((ref) {
   throw UnimplementedError('main에서 override 필요');
@@ -63,23 +64,36 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   }
 }
 
-// 근무 유형 목록 (앱 메모리에만 저장, 기본값으로 시작)
+// 근무 유형 목록 (Hive 영구 저장)
 final shiftTypesProvider =
     StateNotifierProvider<ShiftTypesNotifier, List<ShiftType>>((ref) {
-  return ShiftTypesNotifier();
+  return ShiftTypesNotifier(ref.watch(shiftTypeRepositoryProvider));
 });
 
 class ShiftTypesNotifier extends StateNotifier<List<ShiftType>> {
-  ShiftTypesNotifier() : super(ShiftType.defaults());
+  final ShiftTypeRepository _repo;
 
-  void add(ShiftType type) => state = [...state, type];
+  ShiftTypesNotifier(this._repo) : super(_repo.getAll());
 
-  void remove(String id) =>
-      state = state.where((t) => t.id != id).toList();
+  Future<void> add(ShiftType type) async {
+    await _repo.save(type);
+    state = _repo.getAll();
+  }
 
-  void update(ShiftType type) =>
-      state = state.map((t) => t.id == type.id ? type : t).toList();
+  Future<void> remove(String id) async {
+    await _repo.delete(id);
+    state = _repo.getAll();
+  }
+
+  Future<void> update(ShiftType type) async {
+    await _repo.save(type);
+    state = _repo.getAll();
+  }
 }
+
+final shiftTypeRepositoryProvider = Provider<ShiftTypeRepository>((ref) {
+  throw UnimplementedError('main에서 override 필요');
+});
 
 final overrideRepositoryProvider = Provider<OverrideRepository>((ref) {
   throw UnimplementedError('main에서 override 필요');

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:table_calendar/table_calendar.dart';
+import '../../app_widget_observer.dart';
 import '../../core/models/date_override.dart';
 import '../../core/models/shift_type.dart';
 import '../../core/providers/schedule_providers.dart';
@@ -103,6 +104,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   shiftTypeId: shiftTypeId,
                 ),
               );
+          await syncAll(ref);
         },
         onReset: hasOverride
             ? () async {
@@ -110,6 +112,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       scheduleId,
                       DateTime(date.year, date.month, date.day),
                     );
+                await syncAll(ref);
               }
             : null,
       ),

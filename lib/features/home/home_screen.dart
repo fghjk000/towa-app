@@ -14,16 +14,18 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final schedule = ref.watch(activeScheduleProvider);
     final shiftTypes = ref.watch(shiftTypesProvider);
+    final overrides = ref.watch(overridesProvider);
     final today = DateTime.now();
 
     if (schedule == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('교대근무')),
+        appBar: AppBar(title: const Text('일정')),
         body: const Center(child: Text('설정에서 일정을 추가해주세요')),
       );
     }
 
-    final todayId = ShiftCalculator.getShiftTypeIdForDate(schedule, today);
+    final todayId = ShiftCalculator.getShiftTypeIdForDate(schedule, today,
+        overrides: overrides);
     final todayShift = shiftTypes.where((t) => t.id == todayId).firstOrNull;
 
     // 이번 주 일요일부터 7일 데이터 계산
@@ -32,7 +34,8 @@ class HomeScreen extends ConsumerWidget {
     final weekData = <DateTime, ShiftType?>{};
     for (var i = 0; i < 7; i++) {
       final day = weekStart.add(Duration(days: i));
-      final id = ShiftCalculator.getShiftTypeIdForDate(schedule, day);
+      final id = ShiftCalculator.getShiftTypeIdForDate(schedule, day,
+          overrides: overrides);
       weekData[day] = shiftTypes.where((t) => t.id == id).firstOrNull;
     }
 

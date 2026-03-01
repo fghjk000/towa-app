@@ -39,5 +39,7 @@ class ShiftType {
         endHour: 6, endMinute: 0, colorValue: 0xFF3F51B5),
     ShiftType(id: 'off', name: '휴무', startHour: 0, startMinute: 0,
         endHour: 0, endMinute: 0, colorValue: 0xFF9E9E9E, isOff: true),
+    ShiftType(id: 'overtime', name: '특근', startHour: 8, startMinute: 0,
+        endHour: 17, endMinute: 0, colorValue: 0xFFFF5722),
   ];
 }
