@@ -19,9 +19,12 @@
 
 ## 스크린샷
 
-| 홈 | 캘린더 | 사이클 설정 | 설정 |
-|:---:|:---:|:---:|:---:|
-| ![home](store_assets/screenshots/ios/01_home.png) | ![calendar](store_assets/screenshots/ios/02_calendar.png) | ![cycle](store_assets/screenshots/ios/03_cycle_setup.png) | ![settings](store_assets/screenshots/ios/04_settings.png) |
+<p align="center">
+  <img src="store_assets/screenshots/ios/01_home.png" width="200" alt="홈"/>
+  <img src="store_assets/screenshots/ios/02_calendar.png" width="200" alt="캘린더"/>
+  <img src="store_assets/screenshots/ios/03_cycle_setup.png" width="200" alt="사이클 설정"/>
+  <img src="store_assets/screenshots/ios/04_settings.png" width="200" alt="설정"/>
+</p>
 
 ---
 
